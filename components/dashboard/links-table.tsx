@@ -218,6 +218,7 @@ export function LinksTable({
                             size="icon"
                             onClick={() => copyToClipboard(link.slug, link.id)}
                             title="Copy link"
+                            className="cursor-pointer"
                           >
                             {copiedId === link.id ? (
                               <Check className="w-4 h-4 text-green-500" />

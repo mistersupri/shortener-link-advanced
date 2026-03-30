@@ -1,20 +1,36 @@
-'use client'
+"use client";
 
-import { useState, useEffect, use } from 'react'
-import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, MousePointerClick, Globe, Monitor, Chrome } from 'lucide-react'
-import type { Link, AnalyticsData } from '@/lib/types'
-import { ClicksChart } from '@/components/dashboard/clicks-chart'
-import { AnalyticsPieChart } from '@/components/dashboard/analytics-pie-chart'
+import { useState, useEffect, use } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  ArrowLeft,
+  MousePointerClick,
+  Globe,
+  Monitor,
+  Chrome,
+} from "lucide-react";
+import type { Link, AnalyticsData } from "@/lib/types";
+import { ClicksChart } from "@/components/dashboard/clicks-chart";
+import { AnalyticsPieChart } from "@/components/dashboard/analytics-pie-chart";
 
-export default function LinkAnalyticsPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params)
-  const router = useRouter()
-  const [link, setLink] = useState<Link | null>(null)
-  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+export default function LinkAnalyticsPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
+  const router = useRouter();
+  const [link, setLink] = useState<Link | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -22,32 +38,34 @@ export default function LinkAnalyticsPage({ params }: { params: Promise<{ id: st
         const [linkRes, analyticsRes] = await Promise.all([
           fetch(`/api/links/${id}`),
           fetch(`/api/links/${id}/analytics`),
-        ])
+        ]);
 
-        const linkData = await linkRes.json()
-        const analyticsData = await analyticsRes.json()
+        const linkData = await linkRes.json();
+        const analyticsData = await analyticsRes.json();
 
         if (linkRes.ok) {
-          setLink(linkData.link)
+          setLink(linkData.link);
         }
         if (analyticsRes.ok) {
-          setAnalytics(analyticsData)
+          setAnalytics(analyticsData);
         }
       } catch (error) {
-        console.error('Failed to fetch analytics:', error)
+        console.error("Failed to fetch analytics:", error);
       }
-      setIsLoading(false)
-    }
+      setIsLoading(false);
+    };
 
-    fetchData()
-  }, [id])
+    fetchData();
+  }, [id]);
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-muted-foreground">Loading analytics...</div>
+        <div className="animate-pulse text-muted-foreground">
+          Loading analytics...
+        </div>
       </div>
-    )
+    );
   }
 
   if (!link || !analytics) {
@@ -63,21 +81,27 @@ export default function LinkAnalyticsPage({ params }: { params: Promise<{ id: st
           </CardContent>
         </Card>
       </div>
-    )
+    );
   }
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <Button variant="ghost" onClick={() => router.back()} className="mb-2">
+          <Button
+            variant="ghost"
+            onClick={() => router.back()}
+            className="mb-2"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
           <h1 className="text-2xl font-bold">Link Analytics</h1>
-          <p className="text-muted-foreground font-mono">{baseUrl}/{link.slug}</p>
+          <p className="text-muted-foreground font-mono">
+            {baseUrl}/{link.slug}
+          </p>
         </div>
       </div>
 
@@ -85,7 +109,9 @@ export default function LinkAnalyticsPage({ params }: { params: Promise<{ id: st
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Clicks</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Total Clicks
+            </CardTitle>
             <MousePointerClick className="w-4 h-4 text-blue-500" />
           </CardHeader>
           <CardContent>
@@ -94,34 +120,40 @@ export default function LinkAnalyticsPage({ params }: { params: Promise<{ id: st
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Top Country</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Top Country
+            </CardTitle>
             <Globe className="w-4 h-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {analytics.clicksByCountry[0]?.country || 'N/A'}
+              {analytics.clicksByCountry[0]?.country || "N/A"}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Top Device</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Top Device
+            </CardTitle>
             <Monitor className="w-4 h-4 text-purple-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {analytics.clicksByDevice[0]?.device || 'N/A'}
+              {analytics.clicksByDevice[0]?.device || "N/A"}
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Top Browser</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Top Browser
+            </CardTitle>
             <Chrome className="w-4 h-4 text-amber-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {analytics.clicksByBrowser[0]?.browser || 'N/A'}
+              {analytics.clicksByBrowser[0]?.browser || "N/A"}
             </div>
           </CardContent>
         </Card>
@@ -145,7 +177,10 @@ export default function LinkAnalyticsPage({ params }: { params: Promise<{ id: st
             <CardTitle>Devices</CardTitle>
           </CardHeader>
           <CardContent>
-            <AnalyticsPieChart data={analytics.clicksByDevice} dataKey="device" />
+            <AnalyticsPieChart
+              data={analytics.clicksByDevice}
+              dataKey="device"
+            />
           </CardContent>
         </Card>
         <Card>
@@ -153,7 +188,10 @@ export default function LinkAnalyticsPage({ params }: { params: Promise<{ id: st
             <CardTitle>Browsers</CardTitle>
           </CardHeader>
           <CardContent>
-            <AnalyticsPieChart data={analytics.clicksByBrowser} dataKey="browser" />
+            <AnalyticsPieChart
+              data={analytics.clicksByBrowser}
+              dataKey="browser"
+            />
           </CardContent>
         </Card>
         <Card>
@@ -161,7 +199,10 @@ export default function LinkAnalyticsPage({ params }: { params: Promise<{ id: st
             <CardTitle>Countries</CardTitle>
           </CardHeader>
           <CardContent>
-            <AnalyticsPieChart data={analytics.clicksByCountry} dataKey="country" />
+            <AnalyticsPieChart
+              data={analytics.clicksByCountry}
+              dataKey="country"
+            />
           </CardContent>
         </Card>
       </div>
@@ -182,10 +223,18 @@ export default function LinkAnalyticsPage({ params }: { params: Promise<{ id: st
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="text-left py-2 px-3 text-sm font-medium text-muted-foreground">Time</th>
-                    <th className="text-left py-2 px-3 text-sm font-medium text-muted-foreground">Country</th>
-                    <th className="text-left py-2 px-3 text-sm font-medium text-muted-foreground hidden sm:table-cell">Device</th>
-                    <th className="text-left py-2 px-3 text-sm font-medium text-muted-foreground hidden md:table-cell">Browser</th>
+                    <th className="text-left py-2 px-3 text-sm font-medium text-muted-foreground">
+                      Time
+                    </th>
+                    <th className="text-left py-2 px-3 text-sm font-medium text-muted-foreground">
+                      Country
+                    </th>
+                    <th className="text-left py-2 px-3 text-sm font-medium text-muted-foreground hidden sm:table-cell">
+                      Device
+                    </th>
+                    <th className="text-left py-2 px-3 text-sm font-medium text-muted-foreground hidden md:table-cell">
+                      Browser
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -194,9 +243,15 @@ export default function LinkAnalyticsPage({ params }: { params: Promise<{ id: st
                       <td className="py-2 px-3 text-sm">
                         {new Date(click.clicked_at).toLocaleString()}
                       </td>
-                      <td className="py-2 px-3 text-sm">{click.country || 'Unknown'}</td>
-                      <td className="py-2 px-3 text-sm hidden sm:table-cell">{click.device || 'Unknown'}</td>
-                      <td className="py-2 px-3 text-sm hidden md:table-cell">{click.browser || 'Unknown'}</td>
+                      <td className="py-2 px-3 text-sm">
+                        {click.country || "Unknown"}
+                      </td>
+                      <td className="py-2 px-3 text-sm hidden sm:table-cell">
+                        {click.device_type || "Unknown"}
+                      </td>
+                      <td className="py-2 px-3 text-sm hidden md:table-cell">
+                        {click.browser || "Unknown"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -206,5 +261,5 @@ export default function LinkAnalyticsPage({ params }: { params: Promise<{ id: st
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }

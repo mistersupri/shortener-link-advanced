@@ -37,6 +37,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 import type { Link as LinkType } from "@/lib/types";
+import { AnimatePresence, motion } from "framer-motion";
+import { QRCodeSVG } from "qrcode.react";
 
 interface LinksTableProps {
   links: LinkType[];
@@ -60,6 +62,55 @@ export function LinksTable({
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [linkToDelete, setLinkToDelete] = useState<LinkType | null>(null);
+  const [qrLink, setQrLink] = useState<LinkType | null>(null);
+
+  async function downloadSvg() {
+    const svg = document.querySelector("#qr-code");
+    if (!svg || !qrLink) return;
+
+    const image = svg.querySelector("image");
+    if (image) {
+      const href = image.getAttribute("href");
+
+      if (href && !href.startsWith("data:")) {
+        const response = await fetch(href);
+        const blob = await response.blob();
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          image.setAttribute("href", reader.result as string);
+
+          const svgData = new XMLSerializer().serializeToString(svg);
+          const svgBlob = new Blob([svgData], {
+            type: "image/svg+xml;charset=utf-8",
+          });
+
+          const url = URL.createObjectURL(svgBlob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `qr-${qrLink.slug}.svg`;
+          link.click();
+
+          URL.revokeObjectURL(url);
+        };
+
+        reader.readAsDataURL(blob);
+        return;
+      }
+    }
+
+    // fallback (no image)
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const blob = new Blob([svgData], { type: "image/svg+xml" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `qr-${qrLink.slug}.svg`;
+    link.click();
+
+    URL.revokeObjectURL(url);
+  }
 
   const copyToClipboard = async (slug: string, id: string) => {
     const baseUrl = window.location.origin;
@@ -121,6 +172,65 @@ export function LinksTable({
 
   return (
     <>
+      <AnimatePresence>
+        {qrLink && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setQrLink(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-sm bg-zinc-900 border border-zinc-800 rounded-3xl p-8 text-center shadow-2xl"
+            >
+              <h2 className="text-xl font-bold mb-2">{qrLink.slug}</h2>
+              <p className="text-sm text-zinc-500 mb-8 truncate">
+                {qrLink.original_url}
+              </p>
+
+              <div
+                id="qr-code"
+                className="bg-white p-6 rounded-2xl inline-block mb-8"
+              >
+                <QRCodeSVG
+                  value={`${window.location.origin}/r/${qrLink.slug}`}
+                  size={200}
+                  level="H"
+                  includeMargin={false}
+                  imageSettings={{
+                    src: "/logo.png",
+                    x: undefined,
+                    y: undefined,
+                    height: 40,
+                    width: 40,
+                    excavate: true,
+                  }}
+                />
+              </div>
+
+              <div className="space-y-4">
+                <button
+                  onClick={downloadSvg}
+                  className="w-full py-3 bg-zinc-800 text-white font-semibold rounded-xl hover:bg-zinc-700 transition-colors"
+                >
+                  Download SVG
+                </button>
+                <button
+                  onClick={() => setQrLink(null)}
+                  className="w-full py-3 text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -249,12 +359,10 @@ export function LinksTable({
                                 </Link>
                               </DropdownMenuItem>
                               <DropdownMenuItem asChild>
-                                <Link
-                                  href={`/dashboard/qr-codes?link=${link.id}`}
-                                >
+                                <span onClick={() => setQrLink(link)}>
                                   <QrCode className="w-4 h-4 mr-2" />
                                   QR Code
-                                </Link>
+                                </span>
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem

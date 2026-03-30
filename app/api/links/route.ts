@@ -235,7 +235,7 @@ export async function POST(request: Request) {
 
     const links = await sql`
       INSERT INTO links (user_id, original_url, slug, password_hash, expires_at, click_count)
-      VALUES (${session.userId}, ${originalUrl}, ${finalSlug}, ${passwordHash}, ${expiresAt || null}, 0)
+      VALUES (${session.userId}, ${originalUrl}, ${finalSlug}, ${passwordHash}, ${expiresAt ? new Date(expiresAt).toISOString() : null}, 0)
       RETURNING *
     `;
 

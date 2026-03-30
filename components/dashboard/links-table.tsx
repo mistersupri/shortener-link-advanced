@@ -64,52 +64,99 @@ export function LinksTable({
   const [linkToDelete, setLinkToDelete] = useState<LinkType | null>(null);
   const [qrLink, setQrLink] = useState<LinkType | null>(null);
 
-  async function downloadSvg() {
-    const svg = document.querySelector("#qr-code");
-    if (!svg || !qrLink) return;
+  async function downloadQRCode() {
+    const svg = document.querySelector("#qr-code svg");
+    if (!svg) return;
 
-    const image = svg.querySelector("image");
+    const clonedSvg = svg.cloneNode(true) as SVGElement;
+
+    // ✅ wajib namespace
+    clonedSvg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clonedSvg.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+
+    // ✅ inline <image>
+    const image = clonedSvg.querySelector("image");
     if (image) {
-      const href = image.getAttribute("href");
+      let href =
+        image.getAttribute("href") ||
+        image.getAttributeNS("http://www.w3.org/1999/xlink", "href");
 
       if (href && !href.startsWith("data:")) {
-        const response = await fetch(href);
-        const blob = await response.blob();
+        try {
+          const res = await fetch(href);
+          const blob = await res.blob();
 
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          image.setAttribute("href", reader.result as string);
-
-          const svgData = new XMLSerializer().serializeToString(svg);
-          const svgBlob = new Blob([svgData], {
-            type: "image/svg+xml;charset=utf-8",
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
           });
 
-          const url = URL.createObjectURL(svgBlob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = `qr-${qrLink.slug}.svg`;
-          link.click();
-
-          URL.revokeObjectURL(url);
-        };
-
-        reader.readAsDataURL(blob);
-        return;
+          // 🔥 set BOTH (important)
+          image.setAttribute("href", base64);
+          image.setAttributeNS(
+            "http://www.w3.org/1999/xlink",
+            "xlink:href",
+            base64,
+          );
+        } catch (err) {
+          console.error("Failed to inline image", err);
+        }
       }
     }
 
-    // fallback (no image)
-    const svgData = new XMLSerializer().serializeToString(svg);
-    const blob = new Blob([svgData], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
+    // ✅ serialize SVG
+    const svgData = new XMLSerializer().serializeToString(clonedSvg);
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `qr-${qrLink.slug}.svg`;
-    link.click();
+    // ✅ convert ke base64 (lebih stabil dari blob)
+    const svgBase64 = `data:image/svg+xml;base64,${btoa(
+      unescape(encodeURIComponent(svgData)),
+    )}`;
 
-    URL.revokeObjectURL(url);
+    const img = new Image();
+
+    // 🔥 penting untuk CORS
+    img.crossOrigin = "anonymous";
+
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+
+      const width = svg.clientWidth || 200;
+      const height = svg.clientHeight || 200;
+
+      // optional: biar HD
+      const scale = 2;
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      ctx.scale(scale, scale);
+
+      // sedikit delay biar aman render image di dalam SVG
+      setTimeout(() => {
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (!blob) return;
+
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "qr.png";
+          link.click();
+
+          URL.revokeObjectURL(url);
+        }, "image/png");
+      }, 50);
+    };
+
+    img.onerror = (e) => {
+      console.error("Failed to load SVG into image", e);
+    };
+
+    img.src = svgBase64;
   }
 
   const copyToClipboard = async (slug: string, id: string) => {
@@ -215,10 +262,10 @@ export function LinksTable({
 
               <div className="space-y-4">
                 <button
-                  onClick={downloadSvg}
+                  onClick={downloadQRCode}
                   className="w-full py-3 bg-zinc-800 text-white font-semibold rounded-xl hover:bg-zinc-700 transition-colors"
                 >
-                  Download SVG
+                  Download QR Code
                 </button>
                 <button
                   onClick={() => setQrLink(null)}

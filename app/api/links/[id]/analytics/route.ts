@@ -27,16 +27,30 @@ export async function GET(
     }
 
     // Get click counts by day (last 30 days)
-    const clicksByDay = (await prisma.$queryRaw`
-      SELECT 
-        DATE(clicked_at) as date,
-        COUNT(*) as clicks
-      FROM clicks
-      WHERE link_id = ${id}
-        AND clicked_at >= NOW() - INTERVAL '30 days'
-      GROUP BY DATE(clicked_at)
-      ORDER BY date ASC
-    `) as { date: string; clicks: bigint }[];
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const clicks = await prisma.click.findMany({
+      where: {
+        link_id: id,
+        clicked_at: {
+          gte: thirtyDaysAgo,
+        },
+      },
+      select: {
+        clicked_at: true,
+      },
+    });
+
+    const clicksByDayMap = new Map<string, number>();
+    clicks.forEach((click) => {
+      const date = click.clicked_at.toISOString().split("T")[0];
+      clicksByDayMap.set(date, (clicksByDayMap.get(date) || 0) + 1);
+    });
+
+    const clicksByDay = Array.from(clicksByDayMap.entries())
+      .map(([date, clicks]) => ({ date, clicks }))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     // Get clicks by device
     const clicksByDevice = await prisma.click.groupBy({

@@ -65,7 +65,7 @@ export async function PATCH(
     }
 
     // Build update object
-    const updates: Record<string, unknown> = {};
+    const updates: Record<string, any> = {};
 
     if (body.originalUrl !== undefined) {
       try {
@@ -103,10 +103,6 @@ export async function PATCH(
       updates.password_hash = body.password
         ? await hashPassword(body.password)
         : null;
-    }
-
-    if (body.expiresAt !== undefined) {
-      updates.expires_at = new Date(body.expiresAt).toISOString();
     }
 
     if (body.isActive !== undefined) {

@@ -1,81 +1,89 @@
-import { NextResponse } from 'next/server'
-import { sql } from '@/lib/db'
-import { getSession, hashPassword } from '@/lib/auth'
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { getSession, hashPassword } from "@/lib/auth";
 
 export async function PATCH(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await getSession()
-    if (!session || session.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await getSession();
+    if (!session || session.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await params
-    const body = await request.json()
+    const { id } = await params;
+    const body = await request.json();
 
     // Check if user exists
-    const existingUsers = await sql`SELECT * FROM users WHERE id = ${id}`
-    if (existingUsers.length === 0) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    const existingUser = await prisma.user.findUnique({
+      where: { id },
+    });
+    if (!existingUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const existingUser = existingUsers[0]
+    // Build update data
+    const updateData: any = {};
+    if (body.name) updateData.name = body.name;
+    if (body.email) updateData.email = body.email.toLowerCase();
+    if (body.role) updateData.role = body.role;
+    if (body.password)
+      updateData.password_hash = await hashPassword(body.password);
 
-    // Build update
-    let passwordHash = existingUser.password_hash
-    if (body.password) {
-      passwordHash = await hashPassword(body.password)
-    }
+    const user = await prisma.user.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        created_at: true,
+      },
+    });
 
-    const users = await sql`
-      UPDATE users
-      SET 
-        name = COALESCE(${body.name ?? null}, name),
-        email = COALESCE(${body.email?.toLowerCase() ?? null}, email),
-        role = COALESCE(${body.role ?? null}, role),
-        password_hash = ${passwordHash}
-      WHERE id = ${id}
-      RETURNING id, email, name, role, created_at
-    `
-
-    return NextResponse.json({ user: users[0] })
+    return NextResponse.json({ user });
   } catch (error) {
-    console.error('Update user error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("Update user error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const session = await getSession()
-    if (!session || session.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await getSession();
+    if (!session || session.role !== "admin") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await params
+    const { id } = await params;
 
     // Prevent deleting yourself
     if (id === session.userId) {
-      return NextResponse.json({ error: 'Cannot delete yourself' }, { status: 400 })
+      return NextResponse.json(
+        { error: "Cannot delete yourself" },
+        { status: 400 },
+      );
     }
 
-    // Delete user's clicks
-    await sql`DELETE FROM clicks WHERE link_id IN (SELECT id FROM links WHERE user_id = ${id})`
+    // Delete user (cascade will handle related records)
+    await prisma.user.delete({
+      where: { id },
+    });
 
-    // Delete user's links
-    await sql`DELETE FROM links WHERE user_id = ${id}`
-
-    // Delete user
-    await sql`DELETE FROM users WHERE id = ${id}`
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Delete user error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error("Delete user error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

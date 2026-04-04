@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  nextjs:
+    build: ./nextjs
+    container_name: nextjs_app
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/mydb
+      NEXT_PUBLIC_SUPABASE_URL: http://localhost:8000
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: your-anon-key
+    depends_on:
+      - db
+    volumes:
+      - ./app:/app
+    command: npm run dev
+
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: mydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./supabase/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  supabase-studio:
+    image: supabase/studio:latest
+    container_name: supabase_studio
+    ports:
+      - "8000:3000"
+    environment:
+      SUPABASE_URL: http://db:5432
+      SUPABASE_DB_PASSWORD: postgres
+    depends_on:
+      - db
+
+volumes:
+  db_data:

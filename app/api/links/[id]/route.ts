@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { prisma } from "@/lib/db";
 import { getSession, hashPassword } from "@/lib/auth";
 import { isValidSlug, isSlugAvailable } from "@/lib/slug";
 
@@ -15,18 +15,14 @@ export async function GET(
 
     const { id } = await params;
 
-    const links = await sql`
-      SELECT l.*, u.email as user_email, u.name as user_name
-      FROM links l
-      LEFT JOIN users u ON l.user_id = u.id
-      WHERE l.id = ${id}
-    `;
+    const link = await prisma.link.findUnique({
+      where: { id },
+      include: { user: { select: { email: true, name: true } } },
+    });
 
-    if (links.length === 0) {
+    if (!link) {
       return NextResponse.json({ error: "Link not found" }, { status: 404 });
     }
-
-    const link = links[0];
 
     // Check ownership or admin
     if (link.user_id !== session.userId && session.role !== "admin") {
@@ -57,12 +53,13 @@ export async function PATCH(
     const body = await request.json();
 
     // Check ownership or admin
-    const existingLinks = await sql`SELECT * FROM links WHERE id = ${id}`;
-    if (existingLinks.length === 0) {
+    const existingLink = await prisma.link.findUnique({
+      where: { id },
+    });
+    if (!existingLink) {
       return NextResponse.json({ error: "Link not found" }, { status: 404 });
     }
 
-    const existingLink = existingLinks[0];
     if (existingLink.user_id !== session.userId && session.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -117,20 +114,25 @@ export async function PATCH(
     }
 
     // Perform update
-    const link = await sql`
-      UPDATE links
-      SET 
-        original_url = COALESCE(${updates.original_url ?? null}, original_url),
-        slug = COALESCE(${updates.slug ?? null}, slug),
-        password_hash = ${updates.password_hash !== undefined ? updates.password_hash : existingLink.password_hash},
-        expires_at = ${updates.expires_at !== undefined ? updates.expires_at : existingLink.expires_at},
-        is_active = COALESCE(${updates.is_active ?? null}, is_active),
-        updated_at = NOW()
-      WHERE id = ${id}
-      RETURNING *
-    `;
+    const link = await prisma.link.update({
+      where: { id },
+      data: {
+        ...(updates.original_url && {
+          original_url: updates.original_url as string,
+        }),
+        ...(updates.slug && { slug: updates.slug as string }),
+        password_hash: updates.password_hash as string | null,
+        ...(updates.expires_at && {
+          expires_at: new Date(updates.expires_at as string),
+        }),
+        ...(updates.is_active !== undefined && {
+          is_active: updates.is_active as boolean,
+        }),
+        updated_at: new Date(),
+      },
+    });
 
-    return NextResponse.json({ link: link[0] });
+    return NextResponse.json({ link });
   } catch (error) {
     console.error("Update link error:", error);
     return NextResponse.json(
@@ -153,21 +155,21 @@ export async function DELETE(
     const { id } = await params;
 
     // Check ownership or admin
-    const existingLinks = await sql`SELECT * FROM links WHERE id = ${id}`;
-    if (existingLinks.length === 0) {
+    const existingLink = await prisma.link.findUnique({
+      where: { id },
+    });
+    if (!existingLink) {
       return NextResponse.json({ error: "Link not found" }, { status: 404 });
     }
 
-    const existingLink = existingLinks[0];
     if (existingLink.user_id !== session.userId && session.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Delete associated clicks first
-    await sql`DELETE FROM clicks WHERE link_id = ${id}`;
-
-    // Delete the link
-    await sql`DELETE FROM links WHERE id = ${id}`;
+    // Delete the link (clicks will be deleted due to cascade)
+    await prisma.link.delete({
+      where: { id },
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

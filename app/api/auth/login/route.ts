@@ -1,57 +1,60 @@
-import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { sql } from '@/lib/db'
-import { verifyPassword, createToken } from '@/lib/auth'
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { prisma } from "@/lib/db";
+import { verifyPassword, createToken } from "@/lib/auth";
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json()
+    const { email, password } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json(
-        { error: 'Email and password are required' },
-        { status: 400 }
-      )
+        { error: "Email and password are required" },
+        { status: 400 },
+      );
     }
 
-    const users = await sql`
-      SELECT id, email, name, role, password_hash 
-      FROM users 
-      WHERE email = ${email.toLowerCase()}
-    `
-
-    const user = users[0]
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        password_hash: true,
+      },
+    });
 
     if (!user) {
       return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      )
+        { error: "Invalid email or password" },
+        { status: 401 },
+      );
     }
 
-    const isValid = await verifyPassword(password, user.password_hash)
+    const isValid = await verifyPassword(password, user.password_hash);
 
     if (!isValid) {
       return NextResponse.json(
-        { error: 'Invalid email or password' },
-        { status: 401 }
-      )
+        { error: "Invalid email or password" },
+        { status: 401 },
+      );
     }
 
     const token = await createToken({
       userId: user.id,
       email: user.email,
       role: user.role,
-    })
+    });
 
-    const cookieStore = await cookies()
-    cookieStore.set('auth-token', token, {
+    const cookieStore = await cookies();
+    cookieStore.set("auth-token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: '/',
-    })
+      path: "/",
+    });
 
     return NextResponse.json({
       user: {
@@ -60,12 +63,12 @@ export async function POST(request: Request) {
         name: user.name,
         role: user.role,
       },
-    })
+    });
   } catch (error) {
-    console.error('Login error:', error)
+    console.error("Login error:", error);
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+      { error: "Internal server error" },
+      { status: 500 },
+    );
   }
 }

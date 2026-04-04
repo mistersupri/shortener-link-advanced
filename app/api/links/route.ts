@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { prisma } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { generateSlug, isValidSlug, isSlugAvailable } from "@/lib/slug";
 import { hashPassword } from "@/lib/auth";
@@ -23,144 +23,45 @@ export async function GET(request: Request) {
     // Build query based on role
     const isAdmin = session.role === "admin";
 
-    let links;
-    let totalCount;
+    const searchFilter = search
+      ? {
+          OR: [
+            { slug: { contains: search, mode: "insensitive" as const } },
+            {
+              original_url: { contains: search, mode: "insensitive" as const },
+            },
+          ],
+        }
+      : {};
 
-    if (isAdmin) {
-      // Admin sees all links
-      if (status === "active") {
-        links = await sql`
-          SELECT l.*, u.email as user_email, u.name as user_name
-          FROM links l
-          LEFT JOIN users u ON l.user_id = u.id
-          WHERE l.is_active = true
-          AND (l.slug ILIKE ${"%" + search + "%"} OR l.original_url ILIKE ${"%" + search + "%"})
-          ORDER BY 
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'desc' THEN l.created_at END DESC,
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'asc' THEN l.created_at END ASC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'desc' THEN l.click_count END DESC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'asc' THEN l.click_count END ASC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'desc' THEN l.slug END DESC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'asc' THEN l.slug END ASC
-          LIMIT ${limit} OFFSET ${offset}
-        `;
-        const countResult = await sql`
-          SELECT COUNT(*) as count FROM links 
-          WHERE is_active = true 
-          AND (slug ILIKE ${"%" + search + "%"} OR original_url ILIKE ${"%" + search + "%"})
-        `;
-        totalCount = parseInt(countResult[0].count);
-      } else if (status === "inactive") {
-        links = await sql`
-          SELECT l.*, u.email as user_email, u.name as user_name
-          FROM links l
-          LEFT JOIN users u ON l.user_id = u.id
-          WHERE l.is_active = false
-          AND (l.slug ILIKE ${"%" + search + "%"} OR l.original_url ILIKE ${"%" + search + "%"})
-          ORDER BY 
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'desc' THEN l.created_at END DESC,
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'asc' THEN l.created_at END ASC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'desc' THEN l.click_count END DESC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'asc' THEN l.click_count END ASC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'desc' THEN l.slug END DESC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'asc' THEN l.slug END ASC
-          LIMIT ${limit} OFFSET ${offset}
-        `;
-        const countResult = await sql`
-          SELECT COUNT(*) as count FROM links 
-          WHERE is_active = false 
-          AND (slug ILIKE ${"%" + search + "%"} OR original_url ILIKE ${"%" + search + "%"})
-        `;
-        totalCount = parseInt(countResult[0].count);
-      } else {
-        links = await sql`
-          SELECT l.*, u.email as user_email, u.name as user_name
-          FROM links l
-          LEFT JOIN users u ON l.user_id = u.id
-          WHERE (l.slug ILIKE ${"%" + search + "%"} OR l.original_url ILIKE ${"%" + search + "%"})
-          ORDER BY 
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'desc' THEN l.created_at END DESC,
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'asc' THEN l.created_at END ASC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'desc' THEN l.click_count END DESC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'asc' THEN l.click_count END ASC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'desc' THEN l.slug END DESC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'asc' THEN l.slug END ASC
-          LIMIT ${limit} OFFSET ${offset}
-        `;
-        const countResult = await sql`
-          SELECT COUNT(*) as count FROM links 
-          WHERE (slug ILIKE ${"%" + search + "%"} OR original_url ILIKE ${"%" + search + "%"})
-        `;
-        totalCount = parseInt(countResult[0].count);
-      }
-    } else {
-      // Regular users only see their own links
-      if (status === "active") {
-        links = await sql`
-          SELECT * FROM links
-          WHERE user_id = ${session.userId}
-          AND is_active = true
-          AND (slug ILIKE ${"%" + search + "%"} OR original_url ILIKE ${"%" + search + "%"})
-          ORDER BY 
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'desc' THEN created_at END DESC,
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'asc' THEN created_at END ASC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'desc' THEN click_count END DESC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'asc' THEN click_count END ASC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'desc' THEN slug END DESC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'asc' THEN slug END ASC
-          LIMIT ${limit} OFFSET ${offset}
-        `;
-        const countResult = await sql`
-          SELECT COUNT(*) as count FROM links 
-          WHERE user_id = ${session.userId} 
-          AND is_active = true 
-          AND (slug ILIKE ${"%" + search + "%"} OR original_url ILIKE ${"%" + search + "%"})
-        `;
-        totalCount = parseInt(countResult[0].count);
-      } else if (status === "inactive") {
-        links = await sql`
-          SELECT * FROM links
-          WHERE user_id = ${session.userId}
-          AND is_active = false
-          AND (slug ILIKE ${"%" + search + "%"} OR original_url ILIKE ${"%" + search + "%"})
-          ORDER BY 
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'desc' THEN created_at END DESC,
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'asc' THEN created_at END ASC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'desc' THEN click_count END DESC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'asc' THEN click_count END ASC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'desc' THEN slug END DESC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'asc' THEN slug END ASC
-          LIMIT ${limit} OFFSET ${offset}
-        `;
-        const countResult = await sql`
-          SELECT COUNT(*) as count FROM links 
-          WHERE user_id = ${session.userId} 
-          AND is_active = false 
-          AND (slug ILIKE ${"%" + search + "%"} OR original_url ILIKE ${"%" + search + "%"})
-        `;
-        totalCount = parseInt(countResult[0].count);
-      } else {
-        links = await sql`
-          SELECT * FROM links
-          WHERE user_id = ${session.userId}
-          AND (slug ILIKE ${"%" + search + "%"} OR original_url ILIKE ${"%" + search + "%"})
-          ORDER BY 
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'desc' THEN created_at END DESC,
-            CASE WHEN ${sortBy} = 'created_at' AND ${sortOrder} = 'asc' THEN created_at END ASC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'desc' THEN click_count END DESC,
-            CASE WHEN ${sortBy} = 'click_count' AND ${sortOrder} = 'asc' THEN click_count END ASC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'desc' THEN slug END DESC,
-            CASE WHEN ${sortBy} = 'slug' AND ${sortOrder} = 'asc' THEN slug END ASC
-          LIMIT ${limit} OFFSET ${offset}
-        `;
-        const countResult = await sql`
-          SELECT COUNT(*) as count FROM links 
-          WHERE user_id = ${session.userId} 
-          AND (slug ILIKE ${"%" + search + "%"} OR original_url ILIKE ${"%" + search + "%"})
-        `;
-        totalCount = parseInt(countResult[0].count);
-      }
-    }
+    const statusFilter =
+      status === "active"
+        ? { is_active: true }
+        : status === "inactive"
+          ? { is_active: false }
+          : {};
+
+    const userFilter = isAdmin ? {} : { user_id: session.userId };
+
+    const where = {
+      ...searchFilter,
+      ...statusFilter,
+      ...userFilter,
+    };
+
+    const orderBy = { [sortBy]: sortOrder };
+
+    const links = await prisma.link.findMany({
+      where,
+      include: isAdmin
+        ? { user: { select: { email: true, name: true } } }
+        : false,
+      orderBy,
+      take: limit,
+      skip: offset,
+    });
+
+    const totalCount = await prisma.link.count({ where });
 
     return NextResponse.json({
       links,
@@ -233,13 +134,18 @@ export async function POST(request: Request) {
       passwordHash = await hashPassword(password);
     }
 
-    const links = await sql`
-      INSERT INTO links (user_id, original_url, slug, password_hash, expires_at, click_count)
-      VALUES (${session.userId}, ${originalUrl}, ${finalSlug}, ${passwordHash}, ${expiresAt ? new Date(expiresAt).toISOString() : null}, 0)
-      RETURNING *
-    `;
+    const link = await prisma.link.create({
+      data: {
+        user_id: session.userId,
+        original_url: originalUrl,
+        slug: finalSlug,
+        password_hash: passwordHash,
+        expires_at: expiresAt ? new Date(expiresAt) : null,
+        click_count: 0,
+      },
+    });
 
-    return NextResponse.json({ link: links[0] }, { status: 201 });
+    return NextResponse.json({ link }, { status: 201 });
   } catch (error) {
     console.error("Create link error:", error);
     return NextResponse.json(

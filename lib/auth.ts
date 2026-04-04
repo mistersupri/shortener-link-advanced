@@ -1,73 +1,74 @@
-import { SignJWT, jwtVerify } from 'jose'
-import { cookies } from 'next/headers'
-import bcrypt from 'bcryptjs'
-import { sql } from './db'
+import { SignJWT, jwtVerify } from "jose";
+import { cookies } from "next/headers";
+import bcrypt from "bcryptjs";
+import { prisma } from "./db";
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'your-secret-key-min-32-chars-long!'
-)
+  process.env.JWT_SECRET || "your-secret-key-min-32-chars-long!",
+);
 
 export interface User {
-  id: string
-  email: string
-  name: string
-  role: 'admin' | 'user'
-  created_at: string
+  id: string;
+  email: string;
+  name: string;
+  role: "admin" | "user";
+  created_at: string;
 }
 
 export interface JWTPayload {
-  userId: string
-  email: string
-  role: 'admin' | 'user'
+  userId: string;
+  email: string;
+  role: "admin" | "user";
 }
 
 export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 12)
+  return bcrypt.hash(password, 12);
 }
 
-export async function verifyPassword(password: string, hashedPassword: string): Promise<boolean> {
-  return bcrypt.compare(password, hashedPassword)
+export async function verifyPassword(
+  password: string,
+  hashedPassword: string,
+): Promise<boolean> {
+  return bcrypt.compare(password, hashedPassword);
 }
 
 export async function createToken(payload: JWTPayload): Promise<string> {
   return new SignJWT(payload as unknown as Record<string, unknown>)
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime('7d')
-    .sign(JWT_SECRET)
+    .setExpirationTime("7d")
+    .sign(JWT_SECRET);
 }
 
 export async function verifyToken(token: string): Promise<JWTPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
-    return payload as unknown as JWTPayload
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return payload as unknown as JWTPayload;
   } catch {
-    return null
+    return null;
   }
 }
 
 export async function getSession(): Promise<JWTPayload | null> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get('auth-token')?.value
-  if (!token) return null
-  return verifyToken(token)
+  const cookieStore = await cookies();
+  const token = cookieStore.get("auth-token")?.value;
+  if (!token) return null;
+  return verifyToken(token);
 }
 
 export async function getCurrentUser(): Promise<User | null> {
-  const session = await getSession()
-  if (!session) return null
+  const session = await getSession();
+  if (!session) return null;
 
-  const users = await sql`
-    SELECT id, email, name, role, created_at 
-    FROM users 
-    WHERE id = ${session.userId}
-  `
-  return users[0] as User || null
+  return await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, email: true, name: true, role: true, created_at: true },
+  });
 }
 
 export async function isRegistrationEnabled(): Promise<boolean> {
-  const settings = await sql`
-    SELECT value FROM app_settings WHERE key = 'registration_enabled'
-  `
-  return settings[0]?.value === 'true'
+  const setting = await prisma.appSetting.findUnique({
+    where: { key: "registration_enabled" },
+  });
+  return setting?.value === "true";
 }
